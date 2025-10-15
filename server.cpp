@@ -140,7 +140,62 @@ void    detecte_the_command(std::string request, server_info *client, std::vecto
             }
         else
         {
-            
+            std::istringstream iss(request);
+            std::string command;
+            std::string value;
+            iss >> command;
+            std::getline(iss, value);
+            value = ft_trim(value);
+
+            if (command == "NICK")
+            {
+                if (value.empty())
+                {
+                    std::string error = "Error: nickname cannot be empty!\n";
+                    send(client->fd, error.c_str(), error.size(), 0);
+                    throw std::runtime_error("nickname cannot be empty!");
+                }
+                // check if the nickname is already used
+                for (size_t i = 0; i < clients.size(); i++)
+                {
+                    if (clients[i].nickname == value)
+                    {
+                        std::string error = "Error: nickname already in use!\n";
+                        send(client->fd, error.c_str(), error.size(), 0);
+                        throw std::runtime_error("nickname already in use!");
+                    }
+                }
+                client->nickname = value;
+                client->Nickname_flag = 1;
+            }
+
+
+            else if (command == "USER")
+            {
+                if (value.empty())
+                {
+                    std::string error = "Error: username cannot be empty!\n";
+                    send(client->fd, error.c_str(), error.size(), 0);
+                    throw std::runtime_error("username cannot be empty!");
+                }
+                client->username = value;
+                client->Username_flag = 1;
+            }
+            else
+            {
+                std::string error = "Error: command invalid!\n";
+                send(client->fd, error.c_str(), error.size(), 0);
+                throw std::runtime_error("command invalid!");
+            }
+
+            if (client->PASS_flag && client->Nickname_flag && client->Username_flag)
+            {
+                client->has_register = 1;
+                std::string msg = "You are now registered!\n";
+                send(client->fd, msg.c_str(), msg.size(), 0);
+                std::cout << "Client " << client->fd << " registered with nickname: " << client->nickname << " and username: " << client->username << std::endl;
+            }
+
             // handle the two others command
         }
     }
@@ -158,6 +213,24 @@ void    handle_the_req(server_info *client, std::vector<pollfd> &fds, std::vecto
     {
         std::cout << "client disconnected !" << std::endl;
         close (client->fd);
+        // remove from fds
+        for (size_t i = 0; i < fds.size(); i++)
+        {
+            if (fds[i].fd == client->fd)
+            {
+                fds.erase(fds.begin() + i);
+                break;
+            }
+        }
+        for (size_t i = 0; i < clients.size(); i++)
+        {
+            if (clients[i].fd == client->fd)
+            {
+                clients.erase(clients.begin() + i);
+                break;
+            }
+        }
+        return;
     }
     else
     {
@@ -168,13 +241,10 @@ void    handle_the_req(server_info *client, std::vector<pollfd> &fds, std::vecto
         detecte_the_command(request, client, clients);
     }
     // split the req;
-
     // parsc the req
     // first is the passw;
     // second is the nickname or the username
-    
     // initialise the data to the client
-
     // set the flag
 }
 
@@ -184,7 +254,39 @@ void    handle_req(int client_fd ,std::vector<pollfd> &fds, std::vector<server_i
 
     if (client_connected->has_register)
     {
-
+            char buffer[1024];
+    int byte_recived = recv(client_connected->fd, buffer, sizeof(buffer) - 1, 0);
+    if (byte_recived <= 0)
+    {
+        std::cout << "client disconnected !" << std::endl;
+        close (client_connected->fd);
+        // remove from fds
+        for (size_t i = 0; i < fds.size(); i++)
+        {
+            if (fds[i].fd == client_connected->fd)
+            {
+                fds.erase(fds.begin() + i);
+                break;
+            }
+        }
+        for (size_t i = 0; i < clients.size(); i++)
+        {
+            if (clients[i].fd == client_connected->fd)
+            {
+                clients.erase(clients.begin() + i);
+                break;
+            }
+        }
+        return;
+    }
+        else
+        {
+        buffer[byte_recived] = '\0';
+            std::string request = buffer;
+            if (request.back() == '\n')
+            request.pop_back();
+        }
+        std::cout << "command : " << buffer << std::endl;
         //handling_the_req(); // FOR ALAE AND SLAOUI
     }
     else
@@ -270,6 +372,7 @@ int main(int ac, char *av[])
             if (server_fd == -1)
                 close(server_fd);
             std::cerr << e.what() << '\n';
+            exit(1);
         }
     
     std::cout << "the server start listening on port " << av[1] << ":)" << std::endl;
